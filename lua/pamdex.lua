@@ -9,9 +9,10 @@ local M = {}
 
 local config = {
     pandoc = "pandoc",
-    output_path = "/tmp/pamdex/",
-    template = "garamond",
-    pdf_engine = "lualatex"
+    output_path = "/tmp/ptt/",
+    template = "default",
+    pdf_engine = "lualatex",
+    pdf_viewer = "zathura"
 }
 
 local pandocgroup = vim.api.nvim_create_augroup('pandocgroupe', { clear = false })
@@ -34,14 +35,15 @@ local compile_start =  function()
             utl.pamdexmagic(mdfile,config)
         end
     })
+    return pdffile
 end
 
 function open_it()
     if pdffile == nil then
-        pdfile = vim.fn.expand("%:r")..".pdf"
+        pdffile = vim.fn.expand("%:r")..".pdf"
     end
-
-    vim.cmd(":silent !zathura "..pdffile.." &")
+    vim.notify("Opening "..pdffile)
+    vim.cmd(":silent !"..config.pdf_viewer.." "..pdffile.." &")
 end
 
 
