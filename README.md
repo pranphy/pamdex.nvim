@@ -31,6 +31,8 @@ You can configure `pamdex.nvim` by calling the `setup` function. It accepts a ta
 require("pamdex").setup({
   pandoc = "/path/to/pandoc", -- Default: "pandoc" (assumed to be in your system's PATH)
   template = "latex",       -- Default: "latex" (Pandoc's built-in LaTeX template)
+  pdf_engine = "lualatex", -- pdf engine for pandoc to use
+  pdf_viewer = "zathura",  -- pdf viewer to use
 })
 ```
 
