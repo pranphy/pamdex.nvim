@@ -10,34 +10,28 @@ local M = {}
 local config = {
     pandoc = "pandoc",
     output_path = "/tmp",
-    template = "default",
+    template = nil,
+    verbose = false,
     pdf_engine = "lualatex",
     pdf_viewer = "zathura",
-    title = "Merged Document",
-    lua_filter = "minted.lua",
+    title = nil,
+    lua_filter = nil,
     citeproc = true,
-    meta_yaml = "meta.yaml",
-    pdf_engine_opts = { "--shell-escape", "-output-directory=."  },
+    minted = false,
+    minted_style = "",
+    codebox = true,
+    meta_yaml = nil,
+    header_includes = nil,
+    pdf_engine_opts = { },
     transforms = {
-        { "$\\begin{aligned}", "\n\n$$\n\\begin{gathered}" },
-        { "\\end{aligned}$$", "\\end{gathered}\n$$\n\n" },
-        { "$\\begin{array}", "\n$$\n\\begin{array}" },
-        { "\\end{array}$$", "\\end{array}\n$$\n" },
         { "\\f%$", "$" }, -- doxygen inline math
-        { "%s*\n\\end{gathered}", "\\end{gathered}" },
-        { "%s*\n(\\end{.*})", " %1" }, -- This one is a bit trickier to directly translate the N command
-        { "$\\begin{array}", "\n$$\n\\begin{array}" },
-        { "\\end{array}\n$$", "\\end{array}\n$$\n" },
-        { "$\\begin{gathered}", "\n\n$$\n\\begin{gathered}" },
-        { "\\end{gathered}\n$$", "\\end{gathered}\n$$\n" },
-        { "::: bcode", "```" },
-        { ":::", "```\n" },
         { "::toc", "\\tableofcontents" },
         { "<!--center-->", "\\begin{center}" },
         { "<!--endcenter-->", "\\end{center}" },
         { "\\cite{(.-)}", "[@%1]" }, -- for citation 
     },
 }
+
 
 local pandocgroup = vim.api.nvim_create_augroup('pandocgroupe', { clear = false })
 
@@ -109,6 +103,11 @@ end
 M.setup = function(configp)
     -- if configp ~= nil then config = vim.tbl_deep_extend("force", config, configp) end
     if configp ~= nil then config = utl.merge(config,configp) end
+
+    table.insert(config.pdf_engine_opts, "-output-directory="..config.output_path)
+    if config.minted then
+        table.insert(config.pdf_engine_opts, "--shell-escape")
+    end
 
     vim.api.nvim_create_user_command("Pamdex", function(opts)
         local fargs = opts.fargs
