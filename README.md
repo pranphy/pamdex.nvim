@@ -33,11 +33,21 @@ require("pamdex").setup({
   template = "latex",       -- Default: "latex" (Pandoc's built-in LaTeX template)
   pdf_engine = "lualatex", -- pdf engine for pandoc to use
   pdf_viewer = "zathura",  -- pdf viewer to use
+  lua_filter = "minted.lua", -- Default: "minted.lua"
+  citeproc = true,         -- Default: true
+  meta_yaml = "meta.yaml", -- Default: "meta.yaml"
+  pdf_engine_opts = { "--shell-escape" }, -- Default: { "--shell-escape" }
+  transforms = { { "from", "to" } }, -- Replaces Lua string matching pattern `from` to `to` in Markdown content
 })
 ```
 
   * **`pandoc`**: Specifies the full path to your Pandoc executable if it's not in your system's PATH.
   * **`template`**: Sets the Pandoc template to be used for PDF generation. You can specify the name of a built-in Pandoc template (e.g., "latex", "default") or the path to a custom `.latex` template file.
+  * **`lua_filter`**: Specifies a lua filter script for Pandoc to pass via `--lua-filter`. Set to an empty string or `nil` to disable.
+  * **`citeproc`**: Boolean to toggle Pandoc's `--citeproc` functionality.
+  * **`meta_yaml`**: Filename of the metadata yaml file to parse from the directory. Set to an empty string or `nil` to disable.
+  * **`pdf_engine_opts`**: A list of additional string arguments to pass to the `--pdf-engine-opt` flag.
+  * **`transforms`**: A list of pairs `{"pattern", "replacement"}`. These are passed directly to Lua's `string.gsub` function to pre-process the Markdown content before compiling.
 
 **Example Configuration:**
 

@@ -13,7 +13,30 @@ local config = {
     template = "default",
     pdf_engine = "lualatex",
     pdf_viewer = "zathura",
-    title = "Merged Document"
+    title = "Merged Document",
+    lua_filter = "minted.lua",
+    citeproc = true,
+    meta_yaml = "meta.yaml",
+    pdf_engine_opts = { "--shell-escape", "-output-directory=."  },
+    transforms = {
+        { "$\\begin{aligned}", "\n\n$$\n\\begin{gathered}" },
+        { "\\end{aligned}$$", "\\end{gathered}\n$$\n\n" },
+        { "$\\begin{array}", "\n$$\n\\begin{array}" },
+        { "\\end{array}$$", "\\end{array}\n$$\n" },
+        { "\\f%$", "$" }, -- doxygen inline math
+        { "%s*\n\\end{gathered}", "\\end{gathered}" },
+        { "%s*\n(\\end{.*})", " %1" }, -- This one is a bit trickier to directly translate the N command
+        { "$\\begin{array}", "\n$$\n\\begin{array}" },
+        { "\\end{array}\n$$", "\\end{array}\n$$\n" },
+        { "$\\begin{gathered}", "\n\n$$\n\\begin{gathered}" },
+        { "\\end{gathered}\n$$", "\\end{gathered}\n$$\n" },
+        { "::: bcode", "```" },
+        { ":::", "```\n" },
+        { "::toc", "\\tableofcontents" },
+        { "<!--center-->", "\\begin{center}" },
+        { "<!--endcenter-->", "\\end{center}" },
+        { "\\cite{(.-)}", "[@%1]" }, -- for citation 
+    },
 }
 
 local pandocgroup = vim.api.nvim_create_augroup('pandocgroupe', { clear = false })
@@ -53,7 +76,7 @@ local compile_dir = function(dir_name)
     register_autocompile({pattern1, pattern2}, compile_func)
 end
 
-local compile_start =  function(opts)
+M.compile_start =  function(opts)
     if type(opts) == "table" and type(opts.args) == "string" and opts.args ~= "" then
         config.template = opts.args
     elseif type(opts) == "string" and opts ~= "" then
@@ -72,7 +95,7 @@ local compile_start =  function(opts)
     return pdffile
 end
 
-function open_it()
+M.open_it = function()
     if pdffile == nil then
         pdffile = vim.fn.expand("%:r")..".pdf"
     end
@@ -84,16 +107,14 @@ end
 
 
 M.setup = function(configp)
+    -- if configp ~= nil then config = vim.tbl_deep_extend("force", config, configp) end
     if configp ~= nil then config = utl.merge(config,configp) end
-
-    vim.keymap.set("n","<Leader>pm",compile_start)
-    vim.keymap.set("n","<Leader>pv",open_it)
 
     vim.api.nvim_create_user_command("Pamdex", function(opts)
         local fargs = opts.fargs
 
         if #fargs == 0 then
-            compile_start()
+            M.compile_start()
             return
         end
 
@@ -110,7 +131,7 @@ M.setup = function(configp)
             local tpl_name = fargs[2]
             if tpl_name and tpl_name ~= "" then
                 config.template = tpl_name
-                compile_start()
+                M.compile_start()
             else
                 vim.notify("Please provide a template name", vim.log.levels.ERROR)
             end
@@ -119,7 +140,7 @@ M.setup = function(configp)
                 local title_str = table.concat(fargs, " ", 2)
                 title_str = title_str:match("^['\"]?(.-)['\"]?$")
                 config.title = title_str
-                compile_start()
+                M.compile_start()
                 vim.notify("Title set to: " .. title_str, vim.log.levels.INFO)
             else
                 vim.notify("Please provide a title", vim.log.levels.ERROR)

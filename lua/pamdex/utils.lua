@@ -27,25 +27,15 @@ end
 
 
 -- Apply the sed replacements in Lua
-local transform = function(tmppath)
+local transform = function(tmppath, config)
     local tmp_content = read_file(tmppath)
-    tmp_content = tmp_content:gsub("$\\begin{aligned}", "\n\n$$\n\\begin{gathered}")
-        :gsub("\\end{aligned}$$", "\\end{gathered}\n$$\n\n")
-        :gsub("$\\begin{array}", "\n$$\n\\begin{array}")
-        :gsub("\\end{array}$$", "\\end{array}\n$$\n")
-        :gsub("\\f%$", "$") -- doxygen inline math
-        :gsub("%s*\n\\end{gathered}", "\\end{gathered}")
-        :gsub("%s*\n(\\end{.*})", " %1") -- This one is a bit trickier to directly translate the N command
-        :gsub("$\\begin{array}", "\n$$\n\\begin{array}")
-        :gsub("\\end{array}\n$$", "\\end{array}\n$$\n")
-        :gsub("$\\begin{gathered}", "\n\n$$\n\\begin{gathered}")
-        :gsub("\\end{gathered}\n$$", "\\end{gathered}\n$$\n")
-        :gsub("::: bcode", "```")
-        :gsub(":::", "```\n")
-        :gsub("::toc", "\\tableofcontents")
-        :gsub("<!--center-->", "\\begin{center}")
-        :gsub("<!--endcenter-->", "\\end{center}")
-        :gsub("\\cite{(.-)}", "[@%1]") -- for citation 
+    if config and config.transforms then
+        for _, pair in ipairs(config.transforms) do
+            if type(pair) == "table" and #pair == 2 then
+                tmp_content = tmp_content:gsub(pair[1], pair[2])
+            end
+        end
+    end
     return tmp_content
 end
 
@@ -117,16 +107,18 @@ M.merge_all_md = function(dir,config)
         end
     end
     
-    local meta_yaml_path = dir .. "/meta.yaml"
-    local meta_fd = uv.fs_open(meta_yaml_path, "r", 438)
-    if meta_fd then
-        local stat = assert(uv.fs_fstat(meta_fd))
-        local content = assert(uv.fs_read(meta_fd, stat.size))
-        uv.fs_close(meta_fd)
-        
-        local block = (content .. "\n"):match("^%-%-%-\r?\n(.-)\r?\n%-%-%-\r?\n")
-        if not block then block = content end
-        merge_yaml_blocks(block)
+    if config.meta_yaml and config.meta_yaml ~= "" then
+        local meta_yaml_path = dir .. "/" .. config.meta_yaml
+        local meta_fd = uv.fs_open(meta_yaml_path, "r", 438)
+        if meta_fd then
+            local stat = assert(uv.fs_fstat(meta_fd))
+            local content = assert(uv.fs_read(meta_fd, stat.size))
+            uv.fs_close(meta_fd)
+            
+            local block = (content .. "\n"):match("^%-%-%-\r?\n(.-)\r?\n%-%-%-\r?\n")
+            if not block then block = content end
+            merge_yaml_blocks(block)
+        end
     end
     
     for _, fname in ipairs(files) do
@@ -212,21 +204,36 @@ M.pamdexmagic = function(input_file, config, on_completed)
     local args = {
         config.pandoc,
         tmppath,
+        --"-o", ofile,
         "--to", "pdf",
         "--from", "markdown+yaml_metadata_block",
-        "--lua-filter", "minted.lua",
         "--template", config.template,
         "--pdf-engine", config.pdf_engine,
         "--columns", "800",
         "--pdf-engine-opt", "--shell-escape",
         "--pdf-engine-opt", "-output-directory="..odir,
         --"-V", "header-includes=\"\\setminted{outputdir=" .. odir .. "}\"",
-        "--citeproc",
-        "-o", ofile,
     }
 
+    --if config.pdf_engine_opts and type(config.pdf_engine_opts) == "table" then
+    --    for _, opt in ipairs(config.pdf_engine_opts) do
+    --        table.insert(args, "--pdf-engine-opt")
+    --        table.insert(args, opt)
+    --    end
+    --end
 
-    local transformed = transform(tmppath)
+    if config.lua_filter and config.lua_filter ~= "" then
+        table.insert(args, "--lua-filter")
+        table.insert(args, config.lua_filter)
+    end
+
+    if config.citeproc then
+        table.insert(args, "--citeproc")
+    end
+    table.insert(args,"-o")
+    table.insert(args,ofile)
+
+    local transformed = transform(tmppath, config)
     --transformed = transformed .. "cmd : `" .. table.concat(args, " ") .. "`"
     write_back(transformed,tmppath)
 
