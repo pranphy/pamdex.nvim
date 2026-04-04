@@ -1,7 +1,47 @@
-
 local M = {}
 local nvim = vim.api
 local uv = vim.loop
+
+local shadedbox = [[
+\usepackage[most]{tcolorbox}
+\ifdefined\Shaded
+    \renewenvironment{Shaded}{}{}
+\else
+  \newenvironment{Shaded}{}{}
+\fi
+\renewenvironment{Shaded}{
+  \begin{tcolorbox}[
+    breakable,                % Allow code to span multiple pages
+    colback=gray!5!white,    % Light background
+    colframe=gray!30,        % Border color
+    arc=5pt,                   % Rounded corners
+    boxrule=0.5pt,             % Border thickness
+    left=5pt,                  % Padding
+    right=5pt,
+    top=5pt,
+    bottom=5pt,
+    fontupper=\ttfamily
+  ]
+}{
+  \end{tcolorbox}
+}
+]]
+
+local minted_filter = [[
+function CodeBlock(el)
+    local lang = el.classes[1] or "text"
+     local latex = "\\begin{minted}[autogobble]{" .. lang .. "}\n" .. el.text .. "\n\\end{minted}\n"
+    return pandoc.RawBlock('latex', latex)
+end
+]]
+
+local shaded_minted_filter = [[
+function CodeBlock(el)
+    local lang = el.classes[1] or "text"
+    local latex = "\\begin{Shaded}\n" .. "\\begin{minted}[autogobble]{" .. lang .. "}\n" .. el.text .. "\n\\end{minted}\n" .. "\\end{Shaded}"
+    return pandoc.RawBlock('latex', latex)
+end
+]]
 
 
 M.merge = function(a, b)
@@ -27,25 +67,15 @@ end
 
 
 -- Apply the sed replacements in Lua
-local transform = function(tmppath)
+local transform = function(tmppath, config)
     local tmp_content = read_file(tmppath)
-    tmp_content = tmp_content:gsub("$\\begin{aligned}", "\n\n$$\n\\begin{gathered}")
-        :gsub("\\end{aligned}$$", "\\end{gathered}\n$$\n\n")
-        :gsub("$\\begin{array}", "\n$$\n\\begin{array}")
-        :gsub("\\end{array}$$", "\\end{array}\n$$\n")
-        :gsub("\\f%$", "$") -- doxygen inline math
-        :gsub("%s*\n\\end{gathered}", "\\end{gathered}")
-        :gsub("%s*\n(\\end{.*})", " %1") -- This one is a bit trickier to directly translate the N command
-        :gsub("$\\begin{array}", "\n$$\n\\begin{array}")
-        :gsub("\\end{array}\n$$", "\\end{array}\n$$\n")
-        :gsub("$\\begin{gathered}", "\n\n$$\n\\begin{gathered}")
-        :gsub("\\end{gathered}\n$$", "\\end{gathered}\n$$\n")
-        :gsub("::: bcode", "```")
-        :gsub(":::", "```\n")
-        :gsub("::toc", "\\tableofcontents")
-        :gsub("<!--center-->", "\\begin{center}")
-        :gsub("<!--endcenter-->", "\\end{center}")
-        :gsub("\\cite{(.-)}", "[@%1]") -- for citation 
+    if config and config.transforms then
+        for _, pair in ipairs(config.transforms) do
+            if type(pair) == "table" and #pair == 2 then
+                tmp_content = tmp_content:gsub(pair[1], pair[2])
+            end
+        end
+    end
     return tmp_content
 end
 
@@ -66,9 +96,9 @@ local comp_exit = function(tmppath)
     return  function(obj)
         --print("Compilation Done with code: "..obj.code.."Error "..obj.stderr.." and out"..obj.stdout)
         if obj.stderr ~= "" then
-            print("Compilation Error: "..obj.stderr)
+            print(obj.stderr)
         end
-        --vim.schedule(function() vim.fs.rm(tmppath) end)
+        vim.schedule(function() vim.fs.rm(tmppath) end)
     end
 end
 
@@ -117,16 +147,18 @@ M.merge_all_md = function(dir,config)
         end
     end
     
-    local meta_yaml_path = dir .. "/meta.yaml"
-    local meta_fd = uv.fs_open(meta_yaml_path, "r", 438)
-    if meta_fd then
-        local stat = assert(uv.fs_fstat(meta_fd))
-        local content = assert(uv.fs_read(meta_fd, stat.size))
-        uv.fs_close(meta_fd)
-        
-        local block = (content .. "\n"):match("^%-%-%-\r?\n(.-)\r?\n%-%-%-\r?\n")
-        if not block then block = content end
-        merge_yaml_blocks(block)
+    if config.meta_yaml and config.meta_yaml ~= "" then
+        local meta_yaml_path = dir .. "/" .. config.meta_yaml
+        local meta_fd = uv.fs_open(meta_yaml_path, "r", 438)
+        if meta_fd then
+            local stat = assert(uv.fs_fstat(meta_fd))
+            local content = assert(uv.fs_read(meta_fd, stat.size))
+            uv.fs_close(meta_fd)
+            
+            local block = (content .. "\n"):match("^%-%-%-\r?\n(.-)\r?\n%-%-%-\r?\n")
+            if not block then block = content end
+            merge_yaml_blocks(block)
+        end
     end
     
     for _, fname in ipairs(files) do
@@ -208,29 +240,88 @@ M.pamdexmagic = function(input_file, config, on_completed)
         --return
     end
 
-    odir = "." -- all hell breaks lose without this
+    --odir = "." -- all hell breaks lose without this
     local args = {
         config.pandoc,
         tmppath,
+        --"-o", ofile,
         "--to", "pdf",
         "--from", "markdown+yaml_metadata_block",
-        "--lua-filter", "minted.lua",
-        "--template", config.template,
         "--pdf-engine", config.pdf_engine,
-        "--columns", "800",
-        "--pdf-engine-opt", "--shell-escape",
-        "--pdf-engine-opt", "-output-directory="..odir,
-        --"-V", "header-includes=\"\\setminted{outputdir=" .. odir .. "}\"",
-        "--citeproc",
-        "-o", ofile,
+        "--columns", "700",
     }
 
+    if config.minted  then
+        table.insert(args, "-V")
+        table.insert(args, [[header-includes=\usepackage[outputdir=]] .. odir .. "]{minted}")
+    end
 
-    local transformed = transform(tmppath)
+    if config.minted and config.minted_style  and config.minted_style ~= "" then
+        table.insert(args, "-V")
+        table.insert(args, [[\usemintedstyle{]].. config.minted_style .. "}")
+    end
+
+    if config.pdf_engine_opts and type(config.pdf_engine_opts) == "table" then
+        for _, opt in ipairs(config.pdf_engine_opts) do
+            table.insert(args, "--pdf-engine-opt")
+            table.insert(args, opt)
+        end
+    end
+
+    if config.template and config.template ~= "" then
+        table.insert(args, "--template")
+        table.insert(args, config.template)
+    end
+
+    if config.codebox and config.codebox ~= "" then
+        table.insert(args, "-V")
+        table.insert(args, "header-includes=".. shadedbox)
+    end
+
+
+    if config.header_includes and config.header_includes ~= "" then
+        table.insert(args, "-V")
+        table.insert(args, "header-includes=" .. config.header_includes)
+    end
+
+    if config.minted then
+        local filter_path = odir .. "/.pamdex_filter_tmp.lua"
+        local filter_file = io.open(filter_path, "w")
+        if filter_file then
+            if config.codebox then
+                filter_file:write(shaded_minted_filter)
+            else
+                filter_file:write(minted_filter)
+            end
+            filter_file:close()
+            table.insert(args, "--lua-filter")
+            table.insert(args, filter_path)
+        end
+    end
+
+    if config.lua_filter and config.lua_filter ~= "" then
+        table.insert(args, "--lua-filter")
+        table.insert(args, config.lua_filter)
+    end
+
+    if config.citeproc then
+        table.insert(args, "--citeproc")
+    end
+    table.insert(args,"-o")
+    table.insert(args,ofile)
+    if config.extra_args  ~= nil and type(config.extra_args) == "table" then
+        for _, arg in ipairs(config.extra_args) do
+            table.insert(args, arg)
+        end
+    end
+
+    local transformed = transform(tmppath, config)
     --transformed = transformed .. "cmd : `" .. table.concat(args, " ") .. "`"
     write_back(transformed,tmppath)
 
-    print("Running: `" .. table.concat(args, " ").."`")
+    if config.verbose then
+        print("Running: `" .. table.concat(args, " ").."`")
+    end
 
     vim.system(args, { text = true }, function(obj)
         comp_exit(tmppath)(obj)
