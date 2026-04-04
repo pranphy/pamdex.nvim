@@ -60,6 +60,14 @@ require("pamdex").setup({
 })
 ```
 
+## Suggested Mapping
+
+```lua
+local pmd = require("pamdex")
+vim.keymap.set("n","<Leader>pm",pmd.compile_start)
+vim.keymap.set("n","<Leader>pv",pmd.open_it)
+```
+
 ## 🚀 Usage
 
 Once the plugin is installed and (optionally) configured, you can convert the currently open Markdown file to PDF using the following Neovim command:
