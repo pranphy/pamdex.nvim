@@ -248,7 +248,7 @@ M.pamdexmagic = function(input_file, config, on_completed)
         "--to", "pdf",
         "--from", "markdown+yaml_metadata_block",
         "--pdf-engine", config.pdf_engine,
-        "--columns", "800",
+        "--columns", "700",
     }
 
     if config.minted  then
@@ -256,7 +256,7 @@ M.pamdexmagic = function(input_file, config, on_completed)
         table.insert(args, [[header-includes=\usepackage[outputdir=]] .. odir .. "]{minted}")
     end
 
-    if config.minted_style  and config.minted_style ~= "" then
+    if config.minted and config.minted_style  and config.minted_style ~= "" then
         table.insert(args, "-V")
         table.insert(args, [[\usemintedstyle{]].. config.minted_style .. "}")
     end
@@ -309,6 +309,11 @@ M.pamdexmagic = function(input_file, config, on_completed)
     end
     table.insert(args,"-o")
     table.insert(args,ofile)
+    if config.extra_args  ~= nil and type(config.extra_args) == "table" then
+        for _, arg in ipairs(config.extra_args) do
+            table.insert(args, arg)
+        end
+    end
 
     local transformed = transform(tmppath, config)
     --transformed = transformed .. "cmd : `" .. table.concat(args, " ") .. "`"

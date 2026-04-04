@@ -23,6 +23,7 @@ local config = {
     meta_yaml = nil,
     header_includes = nil,
     pdf_engine_opts = { },
+    extra_args = {},
     transforms = {
         { "\\f%$", "$" }, -- doxygen inline math
         { "::toc", "\\tableofcontents" },
