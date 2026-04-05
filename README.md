@@ -1,5 +1,7 @@
 # pamdex.nvim
 
+![](demo/demo.png)
+
 A super handy Neovim plugin for converting Markdown to PDF with near real-time visualization!
 
 This plugin leverages Pandoc to generate beautiful PDFs from your Markdown documents, offering a seamless workflow directly within Neovim. Configure your Pandoc path and template to customize your output.
